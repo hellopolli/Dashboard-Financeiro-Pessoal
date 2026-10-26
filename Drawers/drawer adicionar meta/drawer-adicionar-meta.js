@@ -30,7 +30,7 @@ function initMetaDrawerEvents() {
   if (btnCancel) btnCancel.addEventListener('click', closeDrawer);
   if (overlay) overlay.addEventListener('click', closeDrawer);
 
-  // Função para aplicar máscara monetária em R$
+  // Máscara de Moeda (R$)
   function applyCurrencyMask(inputElement, fieldId) {
     if (!inputElement) return;
     inputElement.addEventListener('input', (e) => {
@@ -47,7 +47,6 @@ function initMetaDrawerEvents() {
     });
   }
 
-  // Aplicação da máscara de moeda nos campos financeiros
   applyCurrencyMask(inputValorDesejado, 'valorDesejado');
   applyCurrencyMask(inputValorGuardado, 'valorGuardado');
 
@@ -78,7 +77,7 @@ function initMetaDrawerEvents() {
     }
   });
 
-  // Validação ao Clicar em Salvar
+  // Validação e Envio de Dados
   if (btnSave) {
     btnSave.addEventListener('click', () => {
       clearAllErrors();
@@ -112,9 +111,27 @@ function initMetaDrawerEvents() {
           prazoMeta: inputPrazo.value
         };
 
-        console.log('Payload da Meta pronto para envio ao Banco de Dados:', JSON.stringify(payload, null, 2));
-        alert('Meta criada com sucesso e enviada para o banco de dados!');
-        closeDrawer();
+        console.log('Enviando Nova Meta ao Banco de Dados:', JSON.stringify(payload, null, 2));
+
+        fetch('/api/metas', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        })
+        .then(res => {
+          if (!res.ok) throw new Error('Erro na requisição ao servidor');
+          return res.json();
+        })
+        .then(data => {
+          console.log('Meta cadastrada com sucesso no banco de dados!', data);
+          alert('Meta criada com sucesso!');
+          closeDrawer();
+        })
+        .catch(error => {
+          console.warn('Modo Simulação / Erro ao conectar à API C#:', error);
+          alert('Dados validados e prontos (Modo simulação local - API offline)!');
+          closeDrawer();
+        });
       }
     });
   }
