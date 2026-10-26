@@ -11,3 +11,10 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 
 var app = builder.Build();
+
+app.UseDefaultFiles();
+app.UseStaticFiles();
+app.MapControllers();
+app.MapFallbackToFile("login.html");
+
+app.Run();
