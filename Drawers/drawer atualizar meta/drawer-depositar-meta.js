@@ -10,16 +10,15 @@ function initDepositarMetaDrawerEvents() {
   const inputData = document.getElementById('dataDeposito');
   const inputObs = document.getElementById('observacoesDeposito');
 
-  // Elementos do card interno do drawer que mudam de acordo com a meta
+
   const displayNome = document.getElementById('displayMetaNome');
   const displayValores = document.getElementById('displayMetaValores');
 
-  // Variável para armazenar o ID da meta selecionada no momento
+
   let selectedMetaId = null;
 
   if (!drawer) return;
 
-  // Delegação de eventos para capturar o clique em qualquer botão "Depositar" da página
   document.addEventListener('click', (e) => {
     const triggerBtn = e.target.closest('.btn-depositar-trigger');
     
@@ -111,7 +110,7 @@ function initDepositarMetaDrawerEvents() {
       }
 
       if (isValid) {
-        // O payload agora envia o ID correto da meta que o usuário escolheu
+        // O payload envia o ID da meta que o usuário escolheu
         const payload = {
           metaId: selectedMetaId,
           valorDeposito: inputValor.value,
