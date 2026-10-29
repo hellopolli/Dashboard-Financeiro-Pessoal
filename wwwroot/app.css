@@ -12,3 +12,17 @@
 .goal-item{grid-template-columns:minmax(0,1fr) auto}
 .goal-actions{display:flex;flex-direction:column;gap:7px;min-width:135px}
 @media(max-width:700px){.goal-item{grid-template-columns:1fr}.goal-actions{width:100%}}
+.row-actions{white-space:nowrap}
+.row-actions .link{border:0;background:none;padding:4px 7px;font-size:12px;cursor:pointer}
+.row-actions .link:disabled{opacity:.5;cursor:wait}
+.balance-note{flex-basis:100%;margin:0;padding-top:12px;border-top:1px solid var(--border);color:var(--muted);font-size:12px}
+.account-summary{margin-bottom:18px}
+.account-summary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px}
+.account-summary-grid>div{display:flex;flex-direction:column;gap:5px;padding:12px;background:#f4f8f5;border-radius:8px;font-size:12px}
+.account-summary-grid span{color:var(--muted);font-size:11px}
+.reservation-explain{display:flex;flex-direction:column;gap:6px;padding:13px;margin-bottom:18px;background:#f4f8f5;border-radius:8px;font-size:12px}
+.reservation-explain small{color:var(--muted);line-height:1.5}
+.history-note{display:block;color:var(--muted);font-size:10px;margin-top:3px}
+.delete-message{font-size:14px;line-height:1.5}
+.delete-explanation{font-size:12px;line-height:1.6;color:var(--muted)}
+.goal-actions .btn.danger:hover{background:#fff4f4}

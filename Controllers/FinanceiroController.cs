@@ -25,6 +25,7 @@ public sealed class FinanceiroController(AppDbContext db) : ControllerBase
     public async Task<IActionResult> CriarCategoria(CategoriaInput input)
     {
         if (input.Tipo is not ("Receita" or "Despesa")) return BadRequest(new { message = "Tipo inválido." });
+        if (string.IsNullOrWhiteSpace(input.Nome)) return BadRequest(new { message = "Informe o nome da categoria." });
         var nome = input.Nome.Trim();
         if (await db.Categorias.AnyAsync(c => c.UsuarioId == UsuarioId && c.Nome == nome && c.Tipo == input.Tipo))
             return Conflict(new { message = "Esta categoria já existe." });
@@ -32,6 +33,37 @@ public sealed class FinanceiroController(AppDbContext db) : ControllerBase
         db.Categorias.Add(categoria);
         await db.SaveChangesAsync();
         return Ok(new { categoria.Id, categoria.Nome, categoria.Tipo });
+    }
+
+    [HttpPut("categorias/{id:int}")]
+    public async Task<IActionResult> EditarCategoria(int id, CategoriaInput input)
+    {
+        var categoria = await db.Categorias.SingleOrDefaultAsync(c => c.Id == id && c.UsuarioId == UsuarioId);
+        if (categoria is null) return NotFound();
+        if (input.Tipo is not ("Receita" or "Despesa")) return BadRequest(new { message = "Tipo inválido." });
+        if (string.IsNullOrWhiteSpace(input.Nome)) return BadRequest(new { message = "Informe o nome da categoria." });
+        var nome = input.Nome.Trim();
+        if (await db.Categorias.AnyAsync(c => c.Id != id && c.UsuarioId == UsuarioId && c.Nome == nome && c.Tipo == input.Tipo))
+            return Conflict(new { message = "Esta categoria já existe." });
+        if (categoria.Tipo != input.Tipo && (await db.Transacoes.AnyAsync(t => t.CategoriaId == id)
+            || await db.Orcamentos.AnyAsync(o => o.CategoriaId == id)))
+            return Conflict(new { message = "Uma categoria em uso não pode mudar de tipo. Você pode alterar o nome." });
+        categoria.Nome = nome;
+        categoria.Tipo = input.Tipo;
+        await db.SaveChangesAsync();
+        return Ok(new { categoria.Id, categoria.Nome, categoria.Tipo });
+    }
+
+    [HttpDelete("categorias/{id:int}")]
+    public async Task<IActionResult> ExcluirCategoria(int id)
+    {
+        var categoria = await db.Categorias.SingleOrDefaultAsync(c => c.Id == id && c.UsuarioId == UsuarioId);
+        if (categoria is null) return NotFound();
+        if (await db.Transacoes.AnyAsync(t => t.CategoriaId == id) || await db.Orcamentos.AnyAsync(o => o.CategoriaId == id))
+            return Conflict(new { message = "Esta categoria está em uso por transações ou orçamentos. Remova esses vínculos antes de excluí-la." });
+        db.Categorias.Remove(categoria);
+        await db.SaveChangesAsync();
+        return NoContent();
     }
 
     [HttpGet("contas")]
@@ -103,6 +135,67 @@ public sealed class FinanceiroController(AppDbContext db) : ControllerBase
         return Ok(new { transacao.Id });
     }
 
+    [HttpPut("transacoes/{id:int}")]
+    public async Task<IActionResult> EditarTransacao(int id, TransacaoInput input)
+    {
+        await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        var item = await db.Transacoes.Include(t => t.Categoria)
+            .SingleOrDefaultAsync(t => t.Id == id && t.UsuarioId == UsuarioId);
+        if (item is null) return NotFound();
+        var categoria = await db.Categorias.SingleOrDefaultAsync(c => c.Id == input.CategoriaId && c.UsuarioId == UsuarioId);
+        if (categoria is null) return BadRequest(new { message = "Selecione uma categoria da sua conta." });
+        if (!await db.Contas.AnyAsync(c => c.Id == input.ContaId && c.UsuarioId == UsuarioId))
+            return BadRequest(new { message = "Selecione uma conta válida." });
+        var oldEffect = item.Categoria.Tipo == "Receita" ? item.Valor : -item.Valor;
+        var newEffect = categoria.Tipo == "Receita" ? input.Valor : -input.Valor;
+        foreach (var contaId in new[] { item.ContaId, (int?)input.ContaId }.Where(x => x.HasValue).Distinct())
+        {
+            var disponivel = await SaldoDisponivel(contaId!.Value);
+            var resultado = disponivel - (item.ContaId == contaId ? oldEffect : 0)
+                + (input.ContaId == contaId ? newEffect : 0);
+            if (resultado < 0)
+                return Conflict(new { message = "A alteração deixaria uma conta com saldo disponível negativo. Ajuste o valor ou as reservas em metas." });
+        }
+        item.Descricao = input.Descricao.Trim();
+        item.Valor = input.Valor;
+        item.DataTransacao = input.DataTransacao.Date;
+        item.CategoriaId = input.CategoriaId;
+        item.ContaId = input.ContaId;
+        await db.SaveChangesAsync();
+        await transaction.CommitAsync();
+        return NoContent();
+    }
+
+    [HttpDelete("transacoes/{id:int}")]
+    public async Task<IActionResult> ExcluirTransacao(int id)
+    {
+        await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        var item = await db.Transacoes.Include(t => t.Categoria)
+            .SingleOrDefaultAsync(t => t.Id == id && t.UsuarioId == UsuarioId);
+        if (item is null) return NotFound();
+        if (item.ContaId is int contaId)
+        {
+            var effect = item.Categoria.Tipo == "Receita" ? item.Valor : -item.Valor;
+            if (await SaldoDisponivel(contaId) - effect < 0)
+                return Conflict(new { message = "Excluir esta receita deixaria a conta com saldo disponível negativo. Ajuste as despesas ou reservas primeiro." });
+        }
+        db.Transacoes.Remove(item);
+        await db.SaveChangesAsync();
+        await transaction.CommitAsync();
+        return NoContent();
+    }
+
+    private async Task<decimal> SaldoDisponivel(int contaId)
+    {
+        var inicial = await db.Contas.Where(c => c.Id == contaId && c.UsuarioId == UsuarioId)
+            .Select(c => c.SaldoInicial).SingleAsync();
+        var movimentos = await db.Transacoes.Where(t => t.ContaId == contaId && t.UsuarioId == UsuarioId)
+            .Select(t => new { t.Valor, Tipo = t.Categoria.Tipo }).ToListAsync();
+        var reservado = await db.DepositosMeta.Where(d => d.ContaId == contaId && d.Meta.UsuarioId == UsuarioId)
+            .SumAsync(d => (decimal?)d.Valor) ?? 0;
+        return inicial + movimentos.Sum(m => m.Tipo == "Receita" ? m.Valor : -m.Valor) - reservado;
+    }
+
     [HttpGet("orcamentos")]
     public async Task<IActionResult> Orcamentos([FromQuery] int? ano, [FromQuery] int? mes)
     {
@@ -137,7 +230,7 @@ public sealed class FinanceiroController(AppDbContext db) : ControllerBase
     [HttpGet("metas")]
     public async Task<IActionResult> Metas()
     {
-        var metas = await db.Metas.Where(m => m.UsuarioId == UsuarioId)
+        var metas = await db.Metas.Where(m => m.UsuarioId == UsuarioId && m.ExcluidaEm == null)
             .OrderBy(m => m.Prazo).Select(m => new { m.Id, m.Nome, m.ValorObjetivo, m.Prazo,
                 Guardado = m.Depositos.Sum(d => (decimal?)d.Valor) ?? 0 }).ToListAsync();
         var reservas = await db.DepositosMeta.Where(d => d.Meta.UsuarioId == UsuarioId)
@@ -159,11 +252,37 @@ public sealed class FinanceiroController(AppDbContext db) : ControllerBase
         return Ok(new { meta.Id });
     }
 
+    [HttpGet("movimentacoes-metas")]
+    public async Task<IActionResult> MovimentacoesMetas() => Ok(await db.DepositosMeta
+        .Where(d => d.Meta.UsuarioId == UsuarioId)
+        .OrderByDescending(d => d.Data).ThenByDescending(d => d.Id)
+        .Select(d => new { d.Id, d.MetaId, Meta = d.Meta.Nome, d.ContaId,
+            Conta = d.Conta.Nome, d.Valor, d.Data, d.Observacao }).ToListAsync());
+
+    [HttpDelete("metas/{id:int}")]
+    public async Task<IActionResult> ExcluirMeta(int id)
+    {
+        await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        var meta = await db.Metas.SingleOrDefaultAsync(m => m.Id == id && m.UsuarioId == UsuarioId && m.ExcluidaEm == null);
+        if (meta is null) return NotFound();
+        var reservas = await db.DepositosMeta.Where(d => d.MetaId == id)
+            .GroupBy(d => d.ContaId).Select(g => new { ContaId = g.Key, Valor = g.Sum(d => d.Valor) })
+            .ToListAsync();
+        foreach (var reserva in reservas.Where(r => r.Valor > 0))
+            db.DepositosMeta.Add(new DepositoMeta { MetaId = id, ContaId = reserva.ContaId,
+                Valor = -reserva.Valor, Data = DateTime.Today,
+                Observacao = "Reserva liberada ao excluir a meta." });
+        meta.ExcluidaEm = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+        await transaction.CommitAsync();
+        return NoContent();
+    }
+
     [HttpPost("metas/{id:int}/depositos")]
     public async Task<IActionResult> Depositar(int id, DepositoInput input)
     {
         await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
-        var meta = await db.Metas.Where(m => m.Id == id && m.UsuarioId == UsuarioId)
+        var meta = await db.Metas.Where(m => m.Id == id && m.UsuarioId == UsuarioId && m.ExcluidaEm == null)
             .Select(m => new { m.ValorObjetivo, Guardado = m.Depositos.Sum(d => (decimal?)d.Valor) ?? 0 })
             .SingleOrDefaultAsync();
         if (meta is null) return NotFound();
@@ -193,7 +312,7 @@ public sealed class FinanceiroController(AppDbContext db) : ControllerBase
     public async Task<IActionResult> Retirar(int id, DepositoInput input)
     {
         await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
-        if (!await db.Metas.AnyAsync(m => m.Id == id && m.UsuarioId == UsuarioId)) return NotFound();
+        if (!await db.Metas.AnyAsync(m => m.Id == id && m.UsuarioId == UsuarioId && m.ExcluidaEm == null)) return NotFound();
         if (!await db.Contas.AnyAsync(c => c.Id == input.ContaId && c.UsuarioId == UsuarioId))
             return BadRequest(new { message = "Selecione uma conta válida." });
         var reservado = await db.DepositosMeta.Where(d => d.MetaId == id && d.ContaId == input.ContaId)

@@ -6,6 +6,7 @@ public class Meta
     public string Nome { get; set; } = string.Empty;
     public decimal ValorObjetivo { get; set; }
     public DateTime Prazo { get; set; }
+    public DateTime? ExcluidaEm { get; set; }
     public int UsuarioId { get; set; }
     public Usuario Usuario { get; set; } = null!;
     public ICollection<DepositoMeta> Depositos { get; set; } = new List<DepositoMeta>();
