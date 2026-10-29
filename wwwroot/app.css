@@ -3,3 +3,12 @@
 :root .chart-toggle{display:inline-flex;gap:3px;padding:3px;background:#eef4ef;border-radius:6px;flex-wrap:wrap}
 .chart-toggle button{border:0;border-radius:4px;background:transparent;color:#52715e;padding:6px 10px;font-size:11px;font-weight:600}
 .chart-toggle button.active{background:#2e805f;color:white}
+.balance-breakdown{display:flex;gap:24px;flex-wrap:wrap;margin-bottom:18px}
+.balance-breakdown>div{min-width:160px;flex:1}
+.balance-breakdown span,.balance-breakdown strong{display:block}
+.balance-breakdown span{font-size:11px;color:var(--muted);margin-bottom:7px}
+.balance-breakdown strong{font-size:19px}
+.account-availability{border-top:1px solid var(--border);margin-top:15px;padding-top:12px;display:flex;flex-direction:column;gap:5px;font-size:11px;color:var(--muted)}
+.goal-item{grid-template-columns:minmax(0,1fr) auto}
+.goal-actions{display:flex;flex-direction:column;gap:7px;min-width:135px}
+@media(max-width:700px){.goal-item{grid-template-columns:1fr}.goal-actions{width:100%}}

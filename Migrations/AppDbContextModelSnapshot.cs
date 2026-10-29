@@ -89,6 +89,9 @@ namespace DashboardFinanceiroPessoal.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<int>("ContaId")
+                        .HasColumnType("int");
+
                     b.Property<DateTime>("Data")
                         .HasColumnType("datetime2");
 
@@ -103,6 +106,8 @@ namespace DashboardFinanceiroPessoal.Migrations
                         .HasColumnType("decimal(18,2)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ContaId");
 
                     b.HasIndex("MetaId");
 
@@ -270,11 +275,19 @@ namespace DashboardFinanceiroPessoal.Migrations
 
             modelBuilder.Entity("DashboardFinanceiroPessoal.Models.DepositoMeta", b =>
                 {
+                    b.HasOne("DashboardFinanceiroPessoal.Models.Conta", "Conta")
+                        .WithMany()
+                        .HasForeignKey("ContaId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
                     b.HasOne("DashboardFinanceiroPessoal.Models.Meta", "Meta")
                         .WithMany("Depositos")
                         .HasForeignKey("MetaId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("Conta");
 
                     b.Navigation("Meta");
                 });

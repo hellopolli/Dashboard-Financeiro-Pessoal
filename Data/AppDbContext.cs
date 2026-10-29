@@ -44,6 +44,8 @@ namespace DashboardFinanceiroPessoal.Data
                 .HasForeignKey(o => o.CategoriaId).OnDelete(DeleteBehavior.NoAction);
             modelBuilder.Entity<Meta>().Property(m => m.ValorObjetivo).HasColumnType("decimal(18,2)");
             modelBuilder.Entity<DepositoMeta>().Property(d => d.Valor).HasColumnType("decimal(18,2)");
+            modelBuilder.Entity<DepositoMeta>().HasOne(d => d.Conta).WithMany()
+                .HasForeignKey(d => d.ContaId).OnDelete(DeleteBehavior.NoAction);
         }
     }
 }

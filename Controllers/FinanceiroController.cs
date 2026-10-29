@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Data;
 using System.Security.Claims;
 using DashboardFinanceiroPessoal.Data;
 using DashboardFinanceiroPessoal.Models;
@@ -40,9 +41,17 @@ public sealed class FinanceiroController(AppDbContext db) : ControllerBase
             .Select(c => new { c.Id, c.Nome, c.Instituicao, c.Tipo, c.SaldoInicial }).ToListAsync();
         var movimentos = await db.Transacoes.Where(t => t.UsuarioId == UsuarioId && t.ContaId != null)
             .Select(t => new { t.ContaId, t.Valor, Tipo = t.Categoria.Tipo }).ToListAsync();
-        return Ok(contas.Select(c => new { c.Id, c.Nome, c.Instituicao, c.Tipo,
-            Saldo = c.SaldoInicial + movimentos.Where(m => m.ContaId == c.Id)
-                .Sum(m => m.Tipo == "Receita" ? m.Valor : -m.Valor) }));
+        var reservas = await db.DepositosMeta.Where(d => d.Meta.UsuarioId == UsuarioId)
+            .GroupBy(d => d.ContaId).Select(g => new { ContaId = g.Key, Valor = g.Sum(d => d.Valor) })
+            .ToListAsync();
+        return Ok(contas.Select(c =>
+        {
+            var saldo = c.SaldoInicial + movimentos.Where(m => m.ContaId == c.Id)
+                .Sum(m => m.Tipo == "Receita" ? m.Valor : -m.Valor);
+            var reservado = reservas.FirstOrDefault(r => r.ContaId == c.Id)?.Valor ?? 0;
+            return new { c.Id, c.Nome, c.Instituicao, c.Tipo,
+                Saldo = saldo, Reservado = reservado, Disponivel = saldo - reservado };
+        }));
     }
 
     [HttpPost("contas")]
@@ -54,7 +63,8 @@ public sealed class FinanceiroController(AppDbContext db) : ControllerBase
             Tipo = input.Tipo, SaldoInicial = input.SaldoInicial, UsuarioId = UsuarioId };
         db.Contas.Add(conta);
         await db.SaveChangesAsync();
-        return Ok(new { conta.Id, conta.Nome, conta.Instituicao, conta.Tipo, Saldo = conta.SaldoInicial });
+        return Ok(new { conta.Id, conta.Nome, conta.Instituicao, conta.Tipo,
+            Saldo = conta.SaldoInicial, Reservado = 0, Disponivel = conta.SaldoInicial });
     }
 
     [HttpGet("transacoes")]
@@ -67,15 +77,29 @@ public sealed class FinanceiroController(AppDbContext db) : ControllerBase
     [HttpPost("transacoes")]
     public async Task<IActionResult> CriarTransacao(TransacaoInput input)
     {
-        if (!await db.Categorias.AnyAsync(c => c.Id == input.CategoriaId && c.UsuarioId == UsuarioId))
+        await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        var categoria = await db.Categorias.SingleOrDefaultAsync(c => c.Id == input.CategoriaId && c.UsuarioId == UsuarioId);
+        if (categoria is null)
             return BadRequest(new { message = "Selecione uma categoria da sua conta." });
-        if (!await db.Contas.AnyAsync(c => c.Id == input.ContaId && c.UsuarioId == UsuarioId))
+        var conta = await db.Contas.SingleOrDefaultAsync(c => c.Id == input.ContaId && c.UsuarioId == UsuarioId);
+        if (conta is null)
             return BadRequest(new { message = "Selecione uma conta válida." });
+        if (categoria.Tipo == "Despesa")
+        {
+            var movimentos = await db.Transacoes.Where(t => t.UsuarioId == UsuarioId && t.ContaId == input.ContaId)
+                .Select(t => new { t.Valor, Tipo = t.Categoria.Tipo }).ToListAsync();
+            var reservado = await db.DepositosMeta.Where(d => d.ContaId == input.ContaId && d.Meta.UsuarioId == UsuarioId)
+                .SumAsync(d => (decimal?)d.Valor) ?? 0;
+            var disponivel = conta.SaldoInicial + movimentos.Sum(m => m.Tipo == "Receita" ? m.Valor : -m.Valor) - reservado;
+            if (input.Valor > disponivel)
+                return BadRequest(new { message = "A despesa excede o saldo disponível. Retire uma reserva da meta ou escolha outra conta." });
+        }
         var transacao = new Transacao { Descricao = input.Descricao.Trim(), Valor = input.Valor,
             DataTransacao = input.DataTransacao.Date, CategoriaId = input.CategoriaId,
             ContaId = input.ContaId, UsuarioId = UsuarioId };
         db.Transacoes.Add(transacao);
         await db.SaveChangesAsync();
+        await transaction.CommitAsync();
         return Ok(new { transacao.Id });
     }
 
@@ -116,7 +140,13 @@ public sealed class FinanceiroController(AppDbContext db) : ControllerBase
         var metas = await db.Metas.Where(m => m.UsuarioId == UsuarioId)
             .OrderBy(m => m.Prazo).Select(m => new { m.Id, m.Nome, m.ValorObjetivo, m.Prazo,
                 Guardado = m.Depositos.Sum(d => (decimal?)d.Valor) ?? 0 }).ToListAsync();
-        return Ok(metas);
+        var reservas = await db.DepositosMeta.Where(d => d.Meta.UsuarioId == UsuarioId)
+            .GroupBy(d => new { d.MetaId, d.ContaId, Conta = d.Conta.Nome })
+            .Select(g => new { g.Key.MetaId, g.Key.ContaId, g.Key.Conta, Valor = g.Sum(d => d.Valor) })
+            .ToListAsync();
+        return Ok(metas.Select(m => new { m.Id, m.Nome, m.ValorObjetivo, m.Prazo, m.Guardado,
+            Reservas = reservas.Where(r => r.MetaId == m.Id && r.Valor > 0)
+                .Select(r => new { r.ContaId, r.Conta, r.Valor }) }));
     }
 
     [HttpPost("metas")]
@@ -132,12 +162,51 @@ public sealed class FinanceiroController(AppDbContext db) : ControllerBase
     [HttpPost("metas/{id:int}/depositos")]
     public async Task<IActionResult> Depositar(int id, DepositoInput input)
     {
-        if (!await db.Metas.AnyAsync(m => m.Id == id && m.UsuarioId == UsuarioId)) return NotFound();
-        var deposito = new DepositoMeta { MetaId = id, Valor = input.Valor, Data = input.Data.Date,
+        await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        var meta = await db.Metas.Where(m => m.Id == id && m.UsuarioId == UsuarioId)
+            .Select(m => new { m.ValorObjetivo, Guardado = m.Depositos.Sum(d => (decimal?)d.Valor) ?? 0 })
+            .SingleOrDefaultAsync();
+        if (meta is null) return NotFound();
+        if (input.Valor > meta.ValorObjetivo - meta.Guardado)
+            return BadRequest(new { message = "O valor excede o que falta para concluir a meta." });
+
+        var conta = await db.Contas.SingleOrDefaultAsync(c => c.Id == input.ContaId && c.UsuarioId == UsuarioId);
+        if (conta is null) return BadRequest(new { message = "Selecione uma conta válida." });
+        var movimentos = await db.Transacoes.Where(t => t.UsuarioId == UsuarioId && t.ContaId == input.ContaId)
+            .Select(t => new { t.Valor, Tipo = t.Categoria.Tipo }).ToListAsync();
+        var reservado = await db.DepositosMeta.Where(d => d.ContaId == input.ContaId && d.Meta.UsuarioId == UsuarioId)
+            .SumAsync(d => (decimal?)d.Valor) ?? 0;
+        var saldo = conta.SaldoInicial + movimentos.Sum(m => m.Tipo == "Receita" ? m.Valor : -m.Valor);
+        if (input.Valor > saldo - reservado)
+            return BadRequest(new { message = "O valor excede o saldo disponível dessa conta." });
+
+        var deposito = new DepositoMeta { MetaId = id, ContaId = input.ContaId,
+            Valor = input.Valor, Data = input.Data.Date,
             Observacao = input.Observacao?.Trim() ?? string.Empty };
         db.DepositosMeta.Add(deposito);
         await db.SaveChangesAsync();
+        await transaction.CommitAsync();
         return Ok(new { deposito.Id });
+    }
+
+    [HttpPost("metas/{id:int}/retiradas")]
+    public async Task<IActionResult> Retirar(int id, DepositoInput input)
+    {
+        await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        if (!await db.Metas.AnyAsync(m => m.Id == id && m.UsuarioId == UsuarioId)) return NotFound();
+        if (!await db.Contas.AnyAsync(c => c.Id == input.ContaId && c.UsuarioId == UsuarioId))
+            return BadRequest(new { message = "Selecione uma conta válida." });
+        var reservado = await db.DepositosMeta.Where(d => d.MetaId == id && d.ContaId == input.ContaId)
+            .SumAsync(d => (decimal?)d.Valor) ?? 0;
+        if (input.Valor > reservado)
+            return BadRequest(new { message = "O valor excede a reserva dessa meta nessa conta." });
+        var retirada = new DepositoMeta { MetaId = id, ContaId = input.ContaId,
+            Valor = -input.Valor, Data = input.Data.Date,
+            Observacao = input.Observacao?.Trim() ?? string.Empty };
+        db.DepositosMeta.Add(retirada);
+        await db.SaveChangesAsync();
+        await transaction.CommitAsync();
+        return Ok(new { retirada.Id });
     }
 }
 
@@ -178,6 +247,7 @@ public sealed class MetaInput
 public sealed class DepositoInput
 {
     [Range(0.01, 999999999)] public decimal Valor { get; init; }
+    [Range(1, int.MaxValue)] public int ContaId { get; init; }
     [Required] public DateTime Data { get; init; }
     [StringLength(300)] public string? Observacao { get; init; }
 }
