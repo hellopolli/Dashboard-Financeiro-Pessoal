@@ -1,30 +1,19 @@
 # Design QA
 
-**Findings**
+## Referência e implementação
 
-- Visual comparison is blocked. The supplied references are the five attached screenshots in the request (`Captura de tela 2026-10-25 204518.png`, `204549.png`, `204607.png`, `204629.png`, and `204658.png`). The implementation is served locally at `http://localhost:5150`, but no browser was available in this environment to capture or inspect the rendered pages.
-- Required fidelity surfaces (typography, spacing/layout, colors, assets, and copy) could not be reviewed against a rendered capture. No visual pass is claimed.
+As dez fotos do protótipo Figma enviadas em 28/10/2026 mostram Visão Geral, Transações, Orçamento, Metas, Contas, Relatórios e Perfil. A implementação correspondente está em `wwwroot/app.html`, `app.css` e `app.js` e usa o backend ASP.NET Core.
 
-**Open Questions**
+## Verificação
 
-- The backend has no configured email delivery or billing integration. The recovery confirmation explains that email recovery is unavailable, and the plan page indicates that payment integration is still needed.
+- `dotnet build --no-restore`: passou.
+- `node --check wwwroot/app.js`: passou.
+- Migração `FinanceiroCompleto`: aplicada ao LocalDB.
+- Teste de integração em banco isolado: cadastro, login, conta, categoria, transação, orçamento, depósito em meta, isolamento entre usuários e seleção do plano passaram. O banco de teste foi removido.
+- `GET /app.html`: HTTP 200; `GET /api/auth/me` sem sessão: HTTP 401.
 
-**Implementation Checklist**
+## Pendência visual
 
-- [x] Add the five requested screens and connect registration, login, and recovery request forms to the API.
-- [x] Build the ASP.NET Core project successfully.
-- [ ] Capture all five screens in a browser at the reference viewports and compare them with the supplied screenshots.
-- [ ] Resolve any P0, P1, or P2 visual findings from that comparison.
-
-**Evidence**
-
-- Source visual truth: the five screenshots attached to the user request, with reference captures approximately 1115–1129 × 724–747 px.
-- Implementation screenshot: not captured; browser inventory returned no available browsers.
-- Intended viewports: match each source screenshot's approximately 1115–1129 × 724–747 px canvas; no implementation CSS viewport or pixel density could be recorded.
-- State: initial, empty auth forms; plan screen in its initial state.
-- Full-view and focused-region comparisons: not performed because the implementation could not be captured.
-- Primary interactions: not exercised in a browser. Build completed; `git diff --check` reported no whitespace errors.
+A integração local do navegador está desativada nas configurações do Work. O controle do Chrome foi interrompido porque não conseguiu identificar a URL atual com confiança. Não foi possível capturar as páginas renderizadas e compará-las visualmente com as fotos do Figma no mesmo viewport. Também não foi possível exercitar os formulários pelo navegador. A verificação visual precisa ser repetida quando o navegador estiver acessível.
 
 **Final result: blocked**
-
-Blocker: no browser is available in the environment to capture the rendered pages and compare them with the supplied visual references.

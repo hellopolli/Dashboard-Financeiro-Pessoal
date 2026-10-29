@@ -128,7 +128,7 @@ namespace DashboardFinanceiroPessoal.Migrations
                     b.HasOne("DashboardFinanceiroPessoal.Models.Categoria", "Categoria")
                         .WithMany("Transacoes")
                         .HasForeignKey("CategoriaId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
 
                     b.HasOne("DashboardFinanceiroPessoal.Models.Usuario", "Usuario")

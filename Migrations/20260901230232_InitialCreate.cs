@@ -67,8 +67,7 @@ namespace DashboardFinanceiroPessoal.Migrations
                         name: "FK_Transacoes_Categorias_CategoriaId",
                         column: x => x.CategoriaId,
                         principalTable: "Categorias",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
+                        principalColumn: "Id");
                     table.ForeignKey(
                         name: "FK_Transacoes_Usuarios_UsuarioId",
                         column: x => x.UsuarioId,

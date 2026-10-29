@@ -48,6 +48,131 @@ namespace DashboardFinanceiroPessoal.Migrations
                     b.ToTable("Categorias");
                 });
 
+            modelBuilder.Entity("DashboardFinanceiroPessoal.Models.Conta", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Instituicao")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Nome")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<decimal>("SaldoInicial")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("Tipo")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("UsuarioId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UsuarioId");
+
+                    b.ToTable("Contas");
+                });
+
+            modelBuilder.Entity("DashboardFinanceiroPessoal.Models.DepositoMeta", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("Data")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("MetaId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Observacao")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<decimal>("Valor")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MetaId");
+
+                    b.ToTable("DepositosMeta");
+                });
+
+            modelBuilder.Entity("DashboardFinanceiroPessoal.Models.Meta", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Nome")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("Prazo")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("UsuarioId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("ValorObjetivo")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UsuarioId");
+
+                    b.ToTable("Metas");
+                });
+
+            modelBuilder.Entity("DashboardFinanceiroPessoal.Models.Orcamento", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("Ano")
+                        .HasColumnType("int");
+
+                    b.Property<int>("CategoriaId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("Limite")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("Mes")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Nome")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("UsuarioId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CategoriaId");
+
+                    b.HasIndex("UsuarioId");
+
+                    b.ToTable("Orcamentos");
+                });
+
             modelBuilder.Entity("DashboardFinanceiroPessoal.Models.Transacao", b =>
                 {
                     b.Property<int>("Id")
@@ -57,6 +182,9 @@ namespace DashboardFinanceiroPessoal.Migrations
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
                     b.Property<int>("CategoriaId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("ContaId")
                         .HasColumnType("int");
 
                     b.Property<DateTime>("DataTransacao")
@@ -75,6 +203,8 @@ namespace DashboardFinanceiroPessoal.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("CategoriaId");
+
+                    b.HasIndex("ContaId");
 
                     b.HasIndex("UsuarioId");
 
@@ -96,9 +226,16 @@ namespace DashboardFinanceiroPessoal.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("Moeda")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("Nome")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("PlanoSelecionado")
+                        .HasColumnType("bit");
 
                     b.Property<string>("SenhaHash")
                         .IsRequired()
@@ -120,16 +257,49 @@ namespace DashboardFinanceiroPessoal.Migrations
                     b.Navigation("Usuario");
                 });
 
-            modelBuilder.Entity("DashboardFinanceiroPessoal.Models.Transacao", b =>
+            modelBuilder.Entity("DashboardFinanceiroPessoal.Models.Conta", b =>
                 {
-                    b.HasOne("DashboardFinanceiroPessoal.Models.Categoria", "Categoria")
-                        .WithMany("Transacoes")
-                        .HasForeignKey("CategoriaId")
+                    b.HasOne("DashboardFinanceiroPessoal.Models.Usuario", "Usuario")
+                        .WithMany()
+                        .HasForeignKey("UsuarioId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.Navigation("Usuario");
+                });
+
+            modelBuilder.Entity("DashboardFinanceiroPessoal.Models.DepositoMeta", b =>
+                {
+                    b.HasOne("DashboardFinanceiroPessoal.Models.Meta", "Meta")
+                        .WithMany("Depositos")
+                        .HasForeignKey("MetaId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Meta");
+                });
+
+            modelBuilder.Entity("DashboardFinanceiroPessoal.Models.Meta", b =>
+                {
                     b.HasOne("DashboardFinanceiroPessoal.Models.Usuario", "Usuario")
-                        .WithMany("Transacoes")
+                        .WithMany()
+                        .HasForeignKey("UsuarioId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Usuario");
+                });
+
+            modelBuilder.Entity("DashboardFinanceiroPessoal.Models.Orcamento", b =>
+                {
+                    b.HasOne("DashboardFinanceiroPessoal.Models.Categoria", "Categoria")
+                        .WithMany()
+                        .HasForeignKey("CategoriaId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("DashboardFinanceiroPessoal.Models.Usuario", "Usuario")
+                        .WithMany()
                         .HasForeignKey("UsuarioId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -139,9 +309,40 @@ namespace DashboardFinanceiroPessoal.Migrations
                     b.Navigation("Usuario");
                 });
 
+            modelBuilder.Entity("DashboardFinanceiroPessoal.Models.Transacao", b =>
+                {
+                    b.HasOne("DashboardFinanceiroPessoal.Models.Categoria", "Categoria")
+                        .WithMany("Transacoes")
+                        .HasForeignKey("CategoriaId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("DashboardFinanceiroPessoal.Models.Conta", "Conta")
+                        .WithMany()
+                        .HasForeignKey("ContaId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("DashboardFinanceiroPessoal.Models.Usuario", "Usuario")
+                        .WithMany("Transacoes")
+                        .HasForeignKey("UsuarioId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Categoria");
+
+                    b.Navigation("Conta");
+
+                    b.Navigation("Usuario");
+                });
+
             modelBuilder.Entity("DashboardFinanceiroPessoal.Models.Categoria", b =>
                 {
                     b.Navigation("Transacoes");
+                });
+
+            modelBuilder.Entity("DashboardFinanceiroPessoal.Models.Meta", b =>
+                {
+                    b.Navigation("Depositos");
                 });
 
             modelBuilder.Entity("DashboardFinanceiroPessoal.Models.Usuario", b =>

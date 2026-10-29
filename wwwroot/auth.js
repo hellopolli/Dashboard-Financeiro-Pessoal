@@ -12,7 +12,11 @@ const send = async (path, payload) => {
     body: JSON.stringify(payload)
   });
   const result = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(result.message || 'Não foi possível concluir. Tente novamente.');
+  if (!response.ok) {
+    const error = new Error(result.message || 'Não foi possível concluir. Tente novamente.');
+    error.status = response.status;
+    throw error;
+  }
   return result;
 };
 
@@ -28,7 +32,7 @@ document.getElementById('login-form')?.addEventListener('submit', async event =>
       senha: form.senha.value
     });
     sessionStorage.setItem('usuario', JSON.stringify(user));
-    window.location.href = '/plano.html';
+    window.location.href = user.planoSelecionado ? '/app.html#visao-geral' : '/plano.html';
   } catch (error) {
     showNotice('login-notice', error.message);
   } finally {
@@ -77,14 +81,25 @@ document.getElementById('forgot-form')?.addEventListener('submit', async event =
   }
 });
 
-document.getElementById('choose-plan')?.addEventListener('click', () => {
+document.getElementById('choose-plan')?.addEventListener('click', async () => {
   const user = sessionStorage.getItem('usuario');
   if (!user) {
     window.location.href = '/cadastro.html?plano=individual';
     return;
   }
-  const message = document.getElementById('plan-message');
-  message.textContent = 'Plano selecionado. A contratação estará disponível quando o pagamento for integrado.';
+  const button = document.getElementById('choose-plan');
+  button.disabled = true;
+  try {
+    await send('/api/auth/plan', {});
+    window.location.href = '/app.html#visao-geral';
+  } catch (error) {
+    if (error.status === 401) {
+      window.location.href = '/login.html';
+      return;
+    }
+    document.getElementById('plan-message').textContent = error.message;
+    button.disabled = false;
+  }
 });
 
 if (window.location.search.includes('cadastro=sucesso')) {
