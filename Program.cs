@@ -1,8 +1,10 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using DashboardFinanceiroPessoal.Data;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using QuestPDF.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
+QuestPDF.Settings.License = LicenseType.Community;
 
 // Adicionando o DbContext para o projeto reconhecer o banco SQL Server
 builder.Services.AddDbContext<AppDbContext>(options =>

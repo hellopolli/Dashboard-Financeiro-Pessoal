@@ -1,6 +1,6 @@
 const localDate = value => `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`;
 const state = { user: null, contas: [], categorias: [], transacoes: [], orcamentos: [], metas: [], chart: null,
-  periodo: localDate(new Date()).slice(0, 7), busca: '', ordem: 'recentes', metaFiltro: 'todas', returnDrawer: null };
+  periodo: localDate(new Date()).slice(0, 7), busca: '', ordem: 'recentes', metaFiltro: 'todas', chartType: null, returnDrawer: null };
 const $ = selector => document.querySelector(selector);
 const money = value => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value) || 0);
 const formatMoneyInput = value => {
@@ -32,16 +32,18 @@ function toast(message, error = false) { const el = $('#toast'); el.textContent 
 function empty(message) { return `<div class="empty"><i class="bi bi-inbox"></i>${html(message)}</div>`; }
 function headerAction(label, action, icon = 'plus-lg') { return `<button class="btn" data-action="${action}"><i class="bi bi-${icon}"></i>${label}</button>`; }
 function selectedMonth() { return state.transacoes.filter(t => monthOf(t) === state.periodo); }
+function activeChartType() { return state.chartType || (selectedMonth().some(t => t.tipo === 'Despesa') || !selectedMonth().some(t => t.tipo === 'Receita') ? 'Despesa' : 'Receita'); }
 function sums(items) { return { receita: items.filter(t => t.tipo === 'Receita').reduce((s,t) => s + Number(t.valor), 0), despesa: items.filter(t => t.tipo === 'Despesa').reduce((s,t) => s + Number(t.valor), 0) }; }
 function metric(label, value, icon, tone = '') { return `<article class="card metric"><i class="bi bi-${icon} metric-icon"></i><span class="label">${label}</span><strong class="${tone}">${money(value)}</strong><small>Dados das suas movimentações</small></article>`; }
 function recentList(items, limit = 5) { return items.length ? `<ul class="simple-list">${items.slice(0, limit).map(t => `<li><span class="item-icon"><i class="bi bi-${t.tipo === 'Receita' ? 'arrow-down-left' : 'arrow-up-right'}"></i></span><span class="item-main"><strong>${html(t.descricao)}</strong><small>${html(t.conta || 'Sem conta')} · ${date(t.dataTransacao)}</small></span><span class="amount ${t.tipo === 'Receita' ? 'green' : 'red'}">${t.tipo === 'Receita' ? '+' : '−'} ${money(t.valor)}</span></li>`).join('')}</ul>` : empty('Nenhuma transação registrada.'); }
 function periodControl() { return `<input class="select" type="month" id="periodo" aria-label="Mês de referência" value="${state.periodo}">`; }
 function pageHome() {
   const values = sums(selectedMonth()), saldo = state.contas.reduce((s,c) => s + Number(c.saldo), 0);
-  const categories = Object.entries(selectedMonth().filter(t => t.tipo === 'Despesa').reduce((a,t) => (a[t.categoria] = (a[t.categoria] || 0) + Number(t.valor), a), {}));
+  const chartType = activeChartType();
+  const categories = Object.entries(selectedMonth().filter(t => t.tipo === chartType).reduce((a,t) => (a[t.categoria] = (a[t.categoria] || 0) + Number(t.valor), a), {}));
   return `<div class="toolbar"><span class="muted">Olá, ${html(state.user.nome.split(' ')[0])}. Veja o resumo do mês.</span><span style="margin-left:auto">${periodControl()}</span></div>
   <div class="grid metrics">${metric('Saldo Total', saldo, 'wallet2', 'green')}${metric('Receitas', values.receita, 'arrow-down-left', 'green')}${metric('Despesas', values.despesa, 'arrow-up-right', 'red')}${metric('Economia', values.receita - values.despesa, 'piggy-bank', 'green')}</div>
-  <section class="card" style="margin-bottom:18px"><div class="card-head"><h2>Despesas por categoria</h2></div>${categories.length ? '<div class="chart-wrap"><canvas id="category-chart" aria-label="Gráfico de despesas por categoria"></canvas></div>' : empty('Ainda não há despesas neste mês.')}</section>
+  <section class="card" style="margin-bottom:18px"><div class="card-head"><h2>${chartType === 'Despesa' ? 'Despesas' : 'Receitas'} por categoria</h2><div class="chart-toggle" aria-label="Tipo de transação no gráfico"><button type="button" data-action="grafico" data-tipo="Despesa" aria-pressed="${chartType === 'Despesa'}" class="${chartType === 'Despesa' ? 'active' : ''}">Despesas</button><button type="button" data-action="grafico" data-tipo="Receita" aria-pressed="${chartType === 'Receita'}" class="${chartType === 'Receita' ? 'active' : ''}">Receitas</button></div></div>${categories.length ? `<div class="chart-wrap"><canvas id="category-chart" aria-label="Gráfico de ${chartType === 'Despesa' ? 'despesas' : 'receitas'} por categoria"></canvas></div>` : empty(`Ainda não há ${chartType === 'Despesa' ? 'despesas' : 'receitas'} neste mês.`)}</section>
   <section class="card"><div class="card-head"><div><h2>Transações recentes</h2><span class="muted">Movimentações das suas contas</span></div><a href="#transacoes" class="link">Ver todas</a></div>${recentList(state.transacoes)}</section>`;
 }
 function pageTransactions() {
@@ -80,7 +82,7 @@ function pageReports() {
   const max = Math.max(1,...months.flatMap(m => [m.receita,m.despesa]));
   return `<div class="toolbar"><span class="muted">Análise das suas movimentações</span><span style="margin-left:auto">${periodControl()}</span></div><div class="grid metrics" style="grid-template-columns:repeat(3,minmax(0,1fr))">${metric('Receitas',values.receita,'arrow-down-left','green')}${metric('Despesas',values.despesa,'arrow-up-right','red')}${metric('Saldo do Período',values.receita-values.despesa,'wallet2')}</div>
     <section class="card" style="margin-bottom:18px"><h2>Receitas x Despesas</h2><p class="muted">Comparativo dos últimos quatro meses</p>${months.some(m => m.receita || m.despesa) ? `<div class="report-bars">${months.map(m => `<div class="bar-group"><span title="Receitas: ${money(m.receita)}" style="height:${Math.max(1,m.receita/max*100)}%"></span><span title="Despesas: ${money(m.despesa)}" style="height:${Math.max(1,m.despesa/max*100)}%"></span><small>${html(m.label)}</small></div>`).join('')}</div><div class="legend"><b>■ Receitas</b> &nbsp; <em>■ Despesas</em></div>` : empty('Ainda não há movimentações para comparar.')}</section>
-    <section class="card" style="margin-bottom:18px"><h2>Gastos por Categoria</h2>${categories.length ? categories.map(([name,value]) => `<div class="progress-row"><div><strong>${html(name)}</strong><span>${money(value)}</span></div>${progress(value,values.despesa)}</div>`).join('') : empty('Ainda não há despesas neste mês.')}</section><button class="btn full" data-action="exportar"><i class="bi bi-download"></i> Exportar Relatório</button>`;
+    <section class="card" style="margin-bottom:18px"><h2>Gastos por Categoria</h2>${categories.length ? categories.map(([name,value]) => `<div class="progress-row"><div><strong>${html(name)}</strong><span>${money(value)}</span></div>${progress(value,values.despesa)}</div>`).join('') : empty('Ainda não há despesas neste mês.')}</section><button class="btn full" data-action="exportar"><i class="bi bi-download"></i> Exportar Relatório em PDF</button>`;
 }
 function pageProfile() { const u = state.user; return `<div class="profile-wrap"><section class="card profile-hero"><span class="avatar">${html(u.nome[0] || '?')}</span><span><strong>${html(u.nome)}</strong><small>${html(u.email)}</small><small>Plano Individual</small></span><a href="/plano.html" class="btn secondary" style="margin-left:auto">Alterar Plano</a></section>
   <section class="card"><h2>Dados Pessoais</h2><form class="profile-form" id="profile-form"><label class="field">Nome Completo<input name="nome" value="${html(u.nome)}" required minlength="2" maxlength="120"></label><label class="field">E-mail<input type="email" name="email" value="${html(u.email)}" required></label><label class="field">Moeda Padrão<select name="moeda"><option value="BRL">Real brasileiro (BRL – R$)</option></select></label><button class="btn full" type="submit">Salvar Alterações</button></form></section>
@@ -102,8 +104,8 @@ function render() {
 }
 function drawCategoryChart() {
   state.chart?.destroy(); const canvas = $('#category-chart'); if (!canvas) return;
-  if (!window.Chart) { canvas.replaceWith(Object.assign(document.createElement('p'), { className:'muted', textContent:'Gráfico indisponível. As despesas continuam visíveis em Relatórios.' })); return; }
-  const values = Object.entries(selectedMonth().filter(t => t.tipo === 'Despesa').reduce((a,t) => (a[t.categoria] = (a[t.categoria] || 0) + Number(t.valor), a), {}));
+  if (!window.Chart) { canvas.replaceWith(Object.assign(document.createElement('p'), { className:'muted', textContent:'Gráfico indisponível. As movimentações continuam visíveis em Relatórios.' })); return; }
+  const values = Object.entries(selectedMonth().filter(t => t.tipo === activeChartType()).reduce((a,t) => (a[t.categoria] = (a[t.categoria] || 0) + Number(t.valor), a), {}));
   state.chart = new Chart(canvas,{ type:'doughnut', data:{labels:values.map(x=>x[0]),datasets:[{data:values.map(x=>x[1]),backgroundColor:['#2e805f','#6386a3','#907db4','#db9635','#77a49d','#c36e76'],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,cutout:'15%',plugins:{legend:{position:'right',labels:{boxWidth:11,font:{family:'Inter',size:11}}},tooltip:{callbacks:{label:ctx=>`${ctx.label}: ${money(ctx.parsed)}`}}}} });
 }
 function field(label,name,type='text',extra='') { return `<label class="field">${label}<input name="${name}" type="${type}" ${extra} required></label>`; }
@@ -164,16 +166,24 @@ function restoreParentDrawer(categoryId,accountId) {
     form.elements.categoriaId.value = String(categoryId || previous.values.categoriaId);
   if (accountId) form.elements.contaId.value = String(accountId);
 }
-function exportReport() {
-  const rows=[['Data','Descrição','Categoria','Conta','Tipo','Valor'],...selectedMonth().map(t=>[date(t.dataTransacao),t.descricao,t.categoria,t.conta||'',t.tipo,String(t.tipo==='Despesa'?-Number(t.valor):Number(t.valor)).replace('.',',')])];
-  const csv='\ufeff'+rows.map(row=>row.map(cell=>`"${String(cell).replaceAll('"','""')}"`).join(';')).join('\r\n');
-  const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'})); const a=document.createElement('a');a.href=url;a.download=`relatorio-${state.periodo}.csv`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+async function exportReport() {
+  const [ano, mes] = state.periodo.split('-');
+  let response;
+  try { response = await fetch(`/api/financeiro/relatorios/pdf?ano=${ano}&mes=${mes}`, { credentials: 'same-origin' }); }
+  catch { throw new Error('Não foi possível conectar ao backend.'); }
+  if (response.status === 401) { sessionStorage.removeItem('usuario'); location.href = '/login.html'; throw new Error('Sessão encerrada.'); }
+  if (!response.ok) { const body = await response.json().catch(() => ({})); throw new Error(body?.message || 'Não foi possível gerar o PDF.'); }
+  const url = URL.createObjectURL(await response.blob());
+  const link = document.createElement('a'); link.href = url; link.download = `relatorio-${state.periodo}.pdf`;
+  document.body.append(link); link.click(); link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 document.addEventListener('click',async event=>{
   const button=event.target.closest('[data-action]'); if (!button) return;
   const action=button.dataset.action;
   if (action==='fechar') { if (['categoria','conta'].includes($('#drawer-form')?.dataset.type) && state.returnDrawer) restoreParentDrawer(); else closeDrawer(); return; }
-  if (action==='exportar') { exportReport(); return; }
+  if (action==='exportar') { button.disabled = true; try { await exportReport(); toast('Relatório em PDF gerado.'); } catch(e) { toast(e.message,true); } finally { button.disabled = false; } return; }
+  if (action==='grafico') { state.chartType = button.dataset.tipo; render(); return; }
   if (action==='sair') { try { await post('auth/logout',{}); sessionStorage.removeItem('usuario'); location.href='/login.html'; } catch(e) { toast(e.message,true); } return; }
   if (action === 'categoria' || action === 'conta') {
     const form = $('#drawer-form');
