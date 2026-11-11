@@ -151,11 +151,50 @@ public sealed class AuthController(AppDbContext context) : ControllerBase
     }
 
     [HttpPost("forgot-password")]
-    public IActionResult ForgotPassword(ForgotPasswordRequest request)
+    public async Task<IActionResult> ForgotPassword(ForgotPasswordRequest request)
     {
-        // O que faz: Retorno genérico proposital. 
-        // Se excluir e retornar erro quando o e-mail não existe, hackers podem usar essa rota para descobrir quais e-mails têm conta no nosso sistema.
+        var email = request.Email.Trim().ToLowerInvariant();
+        var user = await context.Usuarios.FirstOrDefaultAsync(u => u.Email.ToLower() == email);
+        
+        if (user != null)
+        {
+            // 1. Gera um token temporário
+            var resetToken = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+            
+            // AQUI FOI ALTERADO: Agora aponta para nova-senha.html em vez de recuperar-senha.html
+            var resetLink = $"http://localhost:5000/nova-senha.html?token={Uri.EscapeDataString(resetToken)}&email={Uri.EscapeDataString(email)}";
+
+            // 2. Imprime no terminal em amarelo para chamar a atenção
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            Console.WriteLine("\n=======================================================");
+            Console.WriteLine($"[SIMULAÇÃO DE E-MAIL] Recuperação solicitada para: {email}");
+            Console.WriteLine($"Clique aqui para redefinir: {resetLink}");
+            Console.WriteLine("=======================================================\n");
+            Console.ResetColor();
+        }
+
         return Ok(new { message = "Se o endereço estiver cadastrado, enviaremos instruções para redefinir sua senha." });
+    }
+
+    // =======================================================
+    // REDEFINIR SENHA (VIA LINK DO TERMINAL)
+    // =======================================================
+    [HttpPost("reset-password")]
+    public async Task<IActionResult> ResetPassword(ResetPasswordRequest request)
+    {
+        var email = request.Email.Trim().ToLowerInvariant();
+        var user = await context.Usuarios.FirstOrDefaultAsync(u => u.Email.ToLower() == email);
+        
+        if (user == null)
+            return BadRequest(new { message = "Usuário não encontrado." });
+
+        // Atualiza a senha usando o método de Hash seguro da aplicação
+        user.SenhaHash = HashPassword(request.NovaSenha);
+        
+        // Salva as alterações no banco de dados local
+        await context.SaveChangesAsync();
+        
+        return Ok(new { message = "Senha redefinida com sucesso!" });
     }
 
     // =======================================================
@@ -223,5 +262,12 @@ public sealed class ProfileRequest
 public sealed class ChangePasswordRequest
 {
     [Required] public string SenhaAtual { get; init; } = string.Empty;
+    [Required, StringLength(100, MinimumLength = 8)] public string NovaSenha { get; init; } = string.Empty;
+}
+
+public sealed class ResetPasswordRequest
+{
+    [Required, EmailAddress] public string Email { get; init; } = string.Empty;
+    [Required] public string Token { get; init; } = string.Empty;
     [Required, StringLength(100, MinimumLength = 8)] public string NovaSenha { get; init; } = string.Empty;
 }

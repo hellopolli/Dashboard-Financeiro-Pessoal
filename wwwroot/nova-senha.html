@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Criar Nova Senha | Ctrl + Alt + $</title>
+  <link rel="stylesheet" href="/auth.css">
+</head>
+<body>
+  <main class="auth-shell">
+    <aside class="brand-panel" aria-label="Ctrl + Alt + $">
+      <div class="brand"><span class="brand-mark" aria-hidden="true">$</span><span>Ctrl + Alt + $</span></div>
+      <section class="brand-copy">
+        <p class="eyebrow">SEU CONTROLE FINANCEIRO</p>
+        <h1>Seu dinheiro, seus planos, seu futuro.</h1>
+        <p>Estamos aqui para ajudar você a recuperar o acesso à sua conta.</p>
+      </section>
+      <div class="mini-categories" aria-hidden="true"><span>Receitas</span><span>Despesas</span></div>
+    </aside>
+    <section class="form-panel">
+      <form class="form-card" id="reset-form" novalidate>
+        <h2>Criar nova senha</h2>
+        <p class="subtitle">Digite a sua nova senha de acesso abaixo.</p>
+        
+        <div class="notice" id="reset-notice" role="status" aria-live="polite" style="margin-bottom: 1rem; font-weight: bold;"></div>
+        
+        <div class="field">
+          <label for="novaSenha">Nova Senha</label>
+          <input id="novaSenha" name="novaSenha" type="password" placeholder="Mínimo de 8 caracteres" required minlength="8">
+        </div>
+        <div class="form-spacer"></div>
+        <button class="primary-button" type="submit">Salvar Nova Senha</button>
+        <p class="form-footer"><a href="/login.html">← Cancelar e voltar ao Login</a></p>
+      </form>
+    </section>
+  </main>
+
+  <script>
+    document.getElementById('reset-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const notice = document.getElementById('reset-notice');
+        const novaSenha = document.getElementById('novaSenha').value;
+        
+        const urlParams = new URLSearchParams(window.location.search);
+        const token = urlParams.get('token');
+        const email = urlParams.get('email');
+
+        if (!token || !email) {
+            notice.style.color = "#d9534f";
+            notice.innerText = "Link de recuperação inválido. Solicite novamente.";
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/auth/reset-password', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, token, novaSenha })
+            });
+
+            const result = await response.json();
+            
+            if (response.ok) {
+                notice.style.color = "#5cb85c";
+                notice.innerText = "Senha alterada com sucesso! Redirecionando...";
+                setTimeout(() => window.location.href = '/login.html', 2000);
+            } else {
+                notice.style.color = "#d9534f";
+                notice.innerText = result.message || "Erro ao alterar a senha.";
+            }
+        } catch (error) {
+            notice.style.color = "#d9534f";
+            notice.innerText = "Erro de conexão com o servidor.";
+        }
+    });
+  </script>
+</body>
+</html>

@@ -17,7 +17,10 @@
         <div class="notice" id="login-notice" role="status" aria-live="polite"></div>
         <div class="field"><label for="email">E-mail</label><input id="email" name="email" type="email" autocomplete="email" placeholder="Seu e-mail" required></div>
         <div class="field"><label for="senha">Senha</label><input id="senha" name="senha" type="password" autocomplete="current-password" placeholder="Senha" required></div>
-        <a class="forgot-link" href="/recuperar-senha.html">Esqueci minha senha</a>
+        
+        <!-- AQUI ESTÁ A ALTERAÇÃO: Adicionado o ?v=2 para forçar o navegador a ler a página certa -->
+        <a class="forgot-link" href="/recuperar-senha.html?v=2">Esqueci minha senha</a>
+        
         <button class="primary-button" type="submit">Entrar →</button>
         <p class="form-footer">Não tem uma conta? <a href="/cadastro.html">Cadastre-se</a></p>
       </form>
