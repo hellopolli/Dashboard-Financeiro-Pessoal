@@ -44,15 +44,12 @@ public sealed class AuthController(AppDbContext context) : ControllerBase
         if (user is null || !VerifyPassword(request.Senha, user.SenhaHash))
             return Unauthorized(new { message = "E-mail ou senha inválidos." });
 
-        // O que faz: Cria a sessão segura do usuário (Cookie/Claims).
         await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme,
             new ClaimsPrincipal(new ClaimsIdentity([
                 new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
                 new Claim(ClaimTypes.Name, user.Nome)
             ], CookieAuthenticationDefaults.AuthenticationScheme)));
             
-        // PARTE DO HIRO: Ele adicionou o "planoSelecionado = user.PlanoSelecionado" no retorno 
-        // para o front-end saber se o usuário tem o plano ativo logo ao logar.
         return Ok(new { id = user.Id, nome = user.Nome, email = user.Email, planoSelecionado = user.PlanoSelecionado });
     }
 
