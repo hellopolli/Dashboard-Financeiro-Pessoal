@@ -1,7 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using DashboardFinanceiroPessoal.Data;
 using Microsoft.AspNetCore.Authentication.Cookies;
-// PARTE DO HIRO: Ele importou a biblioteca QuestPDF para gerar os relatórios.
 using QuestPDF.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -18,7 +17,7 @@ builder.Services.AddControllers();
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options => {
         options.Cookie.Name = "PainelFinanceiro.Auth";
-        options.Cookie.HttpOnly = true; // Impede que hackers roubem o cookie via JavaScript (XSS)
+        options.Cookie.HttpOnly = true; 
         options.Cookie.SameSite = SameSiteMode.Lax;
         options.Events.OnRedirectToLogin = context => { context.Response.StatusCode = 401; return Task.CompletedTask; };
         options.Events.OnRedirectToAccessDenied = context => { context.Response.StatusCode = 403; return Task.CompletedTask; };
