@@ -15,16 +15,8 @@ namespace DashboardFinanceiroPessoal.Controllers;
 [Route("api/auth")]
 public sealed class AuthController(AppDbContext context) : ControllerBase
 {
-    // =======================================================
-    // MINHA PARTE: CONFIGURAÇÃO DE SEGURANÇA (HASH)
-    // O que faz: Define o peso da criptografia da senha.
-    // Se excluir: O algoritmo de Hash vai quebrar por não saber quantas iterações fazer.
-    // =======================================================
     private const int Iterations = 100_000;
 
-    // =======================================================
-    // MINHA PARTE: REGISTRO DE USUÁRIO
-    // =======================================================
     [HttpPost("register")]
     public async Task<IActionResult> Register(RegisterRequest request)
     {
@@ -32,7 +24,6 @@ public sealed class AuthController(AppDbContext context) : ControllerBase
         if (await context.Usuarios.AnyAsync(user => user.Email.ToLower() == email))
             return Conflict(new { message = "Este e-mail já está cadastrado." });
 
-        // O que faz: Usa a minha função HashPassword para não salvar a senha em texto limpo.
         var user = new Usuario
         {
             Nome = request.Nome.Trim(),
@@ -45,9 +36,6 @@ public sealed class AuthController(AppDbContext context) : ControllerBase
         return Ok(new { id = user.Id, nome = user.Nome, email = user.Email });
     }
 
-    // =======================================================
-    // MINHA PARTE (BASE) + PARTE DO HIRO (PLANO): LOGIN
-    // =======================================================
     [HttpPost("login")]
     public async Task<IActionResult> Login(LoginRequest request)
     {
@@ -68,23 +56,16 @@ public sealed class AuthController(AppDbContext context) : ControllerBase
         return Ok(new { id = user.Id, nome = user.Nome, email = user.Email, planoSelecionado = user.PlanoSelecionado });
     }
 
-    // =======================================================
-    // MINHA PARTE (BASE) + PARTE DO HIRO (MOEDA/PLANO): DADOS DO USUÁRIO
-    // =======================================================
     [Authorize, HttpGet("me")]
     public async Task<IActionResult> Me()
     {
         var id = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
         var user = await context.Usuarios.FindAsync(id);
         
-        // PARTE DO HIRO: Ele adicionou "moeda = user.Moeda" e "planoSelecionado" no retorno.
         return user is null ? Unauthorized() : Ok(new { id = user.Id, nome = user.Nome, email = user.Email,
             moeda = user.Moeda, planoSelecionado = user.PlanoSelecionado });
     }
 
-    // =======================================================
-    // MINHA PARTE (BASE) + PARTE DO HIRO (MOEDA): ATUALIZAR PERFIL
-    // =======================================================
     [Authorize, HttpPut("profile")]
     public async Task<IActionResult> Profile(ProfileRequest request)
     {
@@ -97,8 +78,6 @@ public sealed class AuthController(AppDbContext context) : ControllerBase
             
         user.Nome = request.Nome.Trim();
         user.Email = email;
-        
-        // PARTE DO HIRO: Ele adicionou a atualização da moeda escolhida pelo usuário.
         user.Moeda = request.Moeda;
         
         await context.SaveChangesAsync();
@@ -106,9 +85,6 @@ public sealed class AuthController(AppDbContext context) : ControllerBase
             planoSelecionado = user.PlanoSelecionado });
     }
 
-    // =======================================================
-    //  ALTERAR SENHA
-    // =======================================================
     [Authorize, HttpPut("password")]
     public async Task<IActionResult> Password(ChangePasswordRequest request)
     {
@@ -116,7 +92,6 @@ public sealed class AuthController(AppDbContext context) : ControllerBase
         var user = await context.Usuarios.FindAsync(id);
         if (user is null) return Unauthorized();
         
-        // O que faz: Reutiliza a minha lógica de Verify e Hash para atualizar a senha com segurança.
         if (!VerifyPassword(request.SenhaAtual, user.SenhaHash))
             return BadRequest(new { message = "Senha atual incorreta." });
         user.SenhaHash = HashPassword(request.NovaSenha);
@@ -124,10 +99,6 @@ public sealed class AuthController(AppDbContext context) : ControllerBase
         return Ok(new { message = "Senha alterada." });
     }
 
-    // =======================================================
-    // PARTE 100% DO HIRO: ESCOLHER PLANO
-    // O que faz: Rota nova criada pelo Hiro para ativar o plano do usuário.
-    // =======================================================
     [Authorize, HttpPost("plan")]
     public async Task<IActionResult> ChoosePlan()
     {
@@ -139,9 +110,6 @@ public sealed class AuthController(AppDbContext context) : ControllerBase
         return Ok(new { planoSelecionado = true });
     }
 
-    // =======================================================
-    // LOGOUT E RECUPERAÇÃO DE SENHA
-    // =======================================================
     [Authorize, HttpPost("logout")]
     public async Task<IActionResult> Logout()
     {
@@ -158,13 +126,10 @@ public sealed class AuthController(AppDbContext context) : ControllerBase
         
         if (user != null)
         {
-            // 1. Gera um token temporário
             var resetToken = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
             
-            // AQUI FOI ALTERADO: Agora aponta para nova-senha.html em vez de recuperar-senha.html
             var resetLink = $"http://localhost:5000/nova-senha.html?token={Uri.EscapeDataString(resetToken)}&email={Uri.EscapeDataString(email)}";
 
-            // 2. Imprime no terminal em amarelo para chamar a atenção
             Console.ForegroundColor = ConsoleColor.Yellow;
             Console.WriteLine("\n=======================================================");
             Console.WriteLine($"[SIMULAÇÃO DE E-MAIL] Recuperação solicitada para: {email}");
@@ -176,9 +141,6 @@ public sealed class AuthController(AppDbContext context) : ControllerBase
         return Ok(new { message = "Se o endereço estiver cadastrado, enviaremos instruções para redefinir sua senha." });
     }
 
-    // =======================================================
-    // REDEFINIR SENHA (VIA LINK DO TERMINAL)
-    // =======================================================
     [HttpPost("reset-password")]
     public async Task<IActionResult> ResetPassword(ResetPasswordRequest request)
     {
@@ -188,19 +150,13 @@ public sealed class AuthController(AppDbContext context) : ControllerBase
         if (user == null)
             return BadRequest(new { message = "Usuário não encontrado." });
 
-        // Atualiza a senha usando o método de Hash seguro da aplicação
         user.SenhaHash = HashPassword(request.NovaSenha);
         
-        // Salva as alterações no banco de dados local
         await context.SaveChangesAsync();
         
         return Ok(new { message = "Senha redefinida com sucesso!" });
     }
 
-    // =======================================================
-    // ALGORITMOS DE CRIPTOGRAFIA (PBKDF2)
-    // O que faz: Gera e valida os hashes de senha protegendo contra vazamentos e Timing Attacks.
-    // =======================================================
     private static string HashPassword(string password)
     {
         var salt = RandomNumberGenerator.GetBytes(16);
@@ -218,7 +174,6 @@ public sealed class AuthController(AppDbContext context) : ControllerBase
             var expected = Convert.FromBase64String(parts[2]);
             var actual = Rfc2898DeriveBytes.Pbkdf2(password, salt, iterations, HashAlgorithmName.SHA256, expected.Length);
             
-            // O que faz: FixedTimeEquals previne que hackers descubram a senha medindo o tempo de resposta da API.
             return CryptographicOperations.FixedTimeEquals(actual, expected);
         }
         catch (FormatException)
@@ -228,10 +183,6 @@ public sealed class AuthController(AppDbContext context) : ControllerBase
     }
 }
 
-// =======================================================
-// MINHA PARTE (BASE) E PARTE DO HIRO (MOEDA): CLASSES DE REQUEST (DTOs)
-// O que faz: Valida os dados antes mesmo de chegarem nas rotas usando DataAnnotations.
-// =======================================================
 public sealed class RegisterRequest
 {
     [Required, StringLength(120, MinimumLength = 2)] public string Nome { get; init; } = string.Empty;
@@ -255,7 +206,6 @@ public sealed class ProfileRequest
     [Required, StringLength(120, MinimumLength = 2)] public string Nome { get; init; } = string.Empty;
     [Required, EmailAddress, StringLength(254)] public string Email { get; init; } = string.Empty;
     
-    // PARTE DO HIRO: Adicionou a restrição para aceitar apenas BRL, USD ou EUR.
     [Required, RegularExpression("BRL|USD|EUR")] public string Moeda { get; init; } = "BRL";
 }
 
